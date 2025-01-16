@@ -1,171 +1,51 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+#Importing Libraries
+import pandas as pd
+import numpy as np
+import ast
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import pickle
 
-# C extensions
-*.so
+#Loading Data Sets 
+credits = pd.read_csv('D:\\Movies Recommndation System\\soft files\\tmdb_5000_credits.csv')
+movies = pd.read_csv('D:\\Movies Recommndation System\\soft files\\tmdb_5000_movies.csv')
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+#Preprocessing of data files
+movie = movies.merge(credits, left_on  = 'title', right_on = 'title')
+movie= movie[['movie_id', 'title', 'overview', 'genres', 'popularity', 'keywords', 'cast', 'crew']]
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+#function used for removal of unwanted things
+def convert(obj):
+    L = []
+    for i in ast.literal_eval(obj):
+        L.append(i['name'])
+    return L
+#preprocessing
+movie['genres'] = movie['genres'].apply(convert)
+movie['keywords'] = movie['keywords'].apply(convert)
+movie['cast'] = movie['cast'].apply(lambda x:[i['name'] for i in ast.literal_eval(x)[:3]])
+movie['crew'] = movie['crew'].apply(lambda x:[i['name'] for i in ast.literal_eval(x) if i['job'] == 'Director'])
+movie['tags'] = movie['genres'] + movie['keywords'] + movie['cast'] + movie['crew']
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+movie = movie [['movie_id', 'title', 'overview','tags']]
+movie['tags'] = movie['tags'].apply(lambda x: " ".join(x)) #to remove the commas
+movie['tags'] = movie['tags'].apply(lambda x: x.lower())  #to lower the text
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
+#Main Code
+tfi = TfidfVectorizer(stop_words='english')
+tfi_matrix = tfi.fit_transform(movie['tags'])
 
-# Translations
-*.mo
-*.pot
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+cosine_sim = cosine_similarity(tfi_matrix, tfi_matrix)
 
-# Flask stuff:
-instance/
-.webassets-cache
+def get_recommendations(title, cosine_sim=cosine_sim):
+    idx = movie[movie['title'] == title] .index[0]
+    sim_scores = list(enumerate(cosine_sim[idx]))
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse= True)
+    sim_scores = sim_scores[1:11]
+    movie_indices = [i[0] for i in sim_scores]
+    return movies['title'].iloc[movie_indices]
 
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
-
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# UV
-#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#uv.lock
-
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
-
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#pdm.lock
-#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
-#   in version control.
-#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
-.pdm.toml
-.pdm-python
-.pdm-build/
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
-
-# PyPI configuration file
-.pypirc
+#using pickle for exporting the file
+with open('movie_data.pkl', 'wb') as file:
+    pickle.dump((movie, cosine_sim), file)
